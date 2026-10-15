@@ -1,6 +1,5 @@
 import os
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 import streamlit as st
 
 # Load secret key from Streamlit Secrets or environment
@@ -10,8 +9,8 @@ if not api_key:
     st.error("GEMINI_API_KEY not found in Streamlit Secrets. Please check your deployment settings.")
     st.stop()
 
-# Initialize Gemini Client
-client = genai.Client(api_key=api_key)
+# Configure the Gemini Client
+genai.configure(api_key=api_key)
 
 # Web App Title and Layout
 st.set_page_config(page_title="AI Study Tutor", page_icon="🎓", layout="centered")
@@ -35,14 +34,15 @@ Rules you MUST follow:
 3. Be patient, supportive, and clear.
 """
 
+# Initialize model with system instruction
+model = genai.GenerativeModel(
+    model_name="gemini-2.5-flash",
+    system_instruction=TUTOR_SYSTEM_INSTRUCTION
+)
+
 # Initialize chat session and message history in Streamlit memory
 if "chat_session" not in st.session_state:
-    st.session_state.chat_session = client.chats.create(
-        model="gemini-2.5-flash",
-        config=types.GenerateContentConfig(
-            system_instruction=TUTOR_SYSTEM_INSTRUCTION
-        )
-    )
+    st.session_state.chat_session = model.start_chat(history=[])
 
 if "messages" not in st.session_state:
     st.session_state.messages = []

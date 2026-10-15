@@ -1,15 +1,13 @@
 import os
-from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 import streamlit as st
 
-# Load secret key
-load_dotenv()
-api_key = os.getenv("GEMINI_API_KEY")
+# Load secret key from Streamlit Secrets or environment
+api_key = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
 
 if not api_key:
-    st.error("GEMINI_API_KEY not found in your .env file. Please check your setup.")
+    st.error("GEMINI_API_KEY not found in Streamlit Secrets. Please check your deployment settings.")
     st.stop()
 
 # Initialize Gemini Client
@@ -22,11 +20,11 @@ st.write("Welcome, student! Ask your tutor for a quiz, test your knowledge, and 
 
 # Define the Tutor Persona
 TUTOR_SYSTEM_INSTRUCTION = """
-You are a strict but supportive Tvet tutor of food and beverage service unit for hospitality students.   
-Your primary job is to help students learn and test their knowledge on the food and beverage service unit.
+You are an encouraging, expert AI Tutor. 
+Your primary job is to help students learn and test their knowledge.
 
 Rules you MUST follow:
-1. When a student requests a quiz or test on a topic (e.g., "Test me on service of water" or "Give me a 3-question  on how to welcome a guestS"):
+1. When a student requests a quiz or test on a topic (e.g., "Test me on Biology" or "Give me a 3-question Python quiz"):
    - Present the questions clearly one by one or as a short numbered list.
    - Do NOT provide the answers upfront.
 2. When the student submits their answers:

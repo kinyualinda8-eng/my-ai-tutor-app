@@ -1,6 +1,7 @@
 import os
 from google import genai
 from google.genai import types
+from google.genai.errors import APIError
 import streamlit as st
 
 # Load secret key from Streamlit Secrets or local environment
@@ -35,57 +36,66 @@ Rules you MUST follow:
 """
 
 
-# Function to get a fresh client connection and send message safely
-def send_message_to_gemini(messages_history, new_user_input):
-    # Initialize a fresh client instance every time to avoid "client has been closed" errors
+# Helper function with automatic fallback across models
+def generate_tutor_response(messages_history, new_user_input):
     client = genai.Client(api_key=api_key)
 
-    # Format message history for the modern API client
+    # Format message history
     formatted_contents = []
     for msg in messages_history:
         role = "user" if msg["role"] == "user" else "model"
         formatted_contents.append(
             types.Content(role=role, parts=[types.Part.from_text(text=msg["content"])])
         )
-
-    # Append the new input
     formatted_contents.append(
         types.Content(role="user", parts=[types.Part.from_text(text=new_user_input)])
     )
 
-    response = client.models.generate_content(
-        model="gemini-3.8-flash",
-        contents=formatted_contents,
-        config=types.GenerateContentConfig(
-            system_instruction=TUTOR_SYSTEM_INSTRUCTION
-        )
-    )
-    return response.text
+    # Primary and backup model list to prevent 503 high-demand errors
+    candidate_models = ["gemini-3.8-flash", "gemini-2.5-flash"]
+
+    for model_name in candidate_models:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=formatted_contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=TUTOR_SYSTEM_INSTRUCTION
+                )
+            )
+            return response.text
+        except APIError as e:
+            # If 503 high demand occurs, try the next model silently
+            if getattr(e, "code", None) == 503 or "503" in str(e):
+                continue
+            raise e
+
+    raise RuntimeError("All Gemini servers are currently busy. Please try again in a few moments.")
 
 
-# Initialize message history in Streamlit memory
+# Initialize message history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display prior chat history on the screen
+# Display prior chat history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Chat input box at the bottom of the web page
+# Chat input box
 if user_input := st.chat_input("Type your message here (e.g., 'Test me on water service')..."):
-    # Display user message instantly
+    # Save & display user message
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # Generate response from Miss Linda using the fresh client function
+    # Generate response from Miss Linda
     with st.chat_message("assistant"):
         with st.spinner("Miss Linda is preparing your material..."):
             try:
-                bot_reply = send_message_to_gemini(st.session_state.messages, user_input)
+                bot_reply = generate_tutor_response(st.session_state.messages, user_input)
                 st.markdown(bot_reply)
 
-                # Save both messages to history
+                # Save both to session history
                 st.session_state.messages.append({"role": "user", "content": user_input})
                 st.session_state.messages.append({"role": "assistant", "content": bot_reply})
             except Exception as e:
